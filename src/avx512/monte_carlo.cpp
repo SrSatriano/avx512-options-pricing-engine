@@ -9,6 +9,14 @@
 
 namespace pricing {
 
+namespace {
+#if defined(__AVX512F__)
+double hsum_pd(__m512d v) {
+  return _mm512_reduce_add_pd(v);
+}
+#endif
+}  // namespace
+
 double monte_carlo_scalar(double spot, double strike, double rate, double vol,
                           double t, std::size_t paths, std::uint64_t seed) {
   std::mt19937_64 rng(seed);
@@ -26,7 +34,7 @@ double monte_carlo_scalar(double spot, double strike, double rate, double vol,
 
 #if defined(__AVX512F__)
 double monte_carlo_avx512(double spot, double strike, double rate, double vol,
-                        double t, std::size_t paths, std::uint64_t seed) {
+                          double t, std::size_t paths, std::uint64_t seed) {
   const std::size_t width = 8;
   const std::size_t blocks = paths / width;
   const double drift = (rate - 0.5 * vol * vol) * t;
@@ -49,7 +57,13 @@ double monte_carlo_avx512(double spot, double strike, double rate, double vol,
     __m512d s = _mm512_mul_pd(v_spot, _mm512_exp_pd(log_s));
     __m512d payoff = _mm512_sub_pd(s, v_strike);
     payoff = _mm512_max_pd(payoff, v_zero);
-    sum += _mm512_reduce_add_pd(payoff);
+    sum += hsum_pd(payoff);
+  }
+  const std::size_t rem = paths % width;
+  for (std::size_t i = 0; i < rem; ++i) {
+    const double z = normal(rng);
+    const double st = spot * std::exp(drift + diffusion * z);
+    sum += std::max(st - strike, 0.0);
   }
   return std::exp(-rate * t) * (sum / static_cast<double>(paths));
 }

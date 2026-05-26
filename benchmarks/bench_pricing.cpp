@@ -18,6 +18,6 @@ int main() {
               paths / ms_scalar / 1000.0);
   std::printf("avx512=%.4f (%.1f ms, %.2f M paths/s)\n", v, ms_avx,
               paths / ms_avx / 1000.0);
-  std::printf("speedup=%.2fx\n", ms_scalar / ms_avx);
+  if (ms_avx > 0) std::printf("speedup=%.2fx\n", ms_scalar / ms_avx);
   return 0;
 }
